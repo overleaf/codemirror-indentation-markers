@@ -1,5 +1,5 @@
 import { getIndentUnit } from '@codemirror/language';
-import { combineConfig, EditorState, Facet, RangeSetBuilder } from '@codemirror/state';
+import { EditorState, RangeSetBuilder } from '@codemirror/state';
 import {
   Decoration,
   ViewPlugin,
@@ -10,64 +10,67 @@ import {
 } from '@codemirror/view';
 import { getCurrentLine, getVisibleLines } from './utils';
 import { IndentEntry, IndentationMap } from './map';
+import { IndentationMarkerConfiguration, indentationMarkerConfig } from "./config";
 
 // CSS classes:
 // - .cm-indent-markers
 
-// CSS variables:
-// - --indent-marker-bg-part
-// - --indent-marker-active-bg-part
+function indentTheme(colorOptions: IndentationMarkerConfiguration['colors']) {
+  const defaultColors = {
+    light: '#F0F1F2',
+    dark: '#2B3245',
+    activeLight: '#E4E5E6',
+    activeDark: '#3C445C',
+  };
 
-/** Color of inactive indent markers. Based on RUI's var(--background-higher) */
-const MARKER_COLOR_LIGHT = '#F0F1F2';
-const MARKER_COLOR_DARK = '#2B3245';
+  let colors = defaultColors;
+  if (colorOptions) {
+    colors = {...defaultColors, ...colorOptions};
+  }
 
-/** Color of active indent markers. Based on RUI's var(--background-highest) */
-const MARKER_COLOR_ACTIVE_LIGHT = '#E4E5E6';
-const MARKER_COLOR_ACTIVE_DARK = '#3C445C';
-
-/** Thickness of indent markers */
-const MARKER_THICKNESS = 1;
-
-const indentTheme = EditorView.baseTheme({
-  '&light': {
-    '--indent-marker-bg-color': MARKER_COLOR_LIGHT,
-    '--indent-marker-active-bg-color': MARKER_COLOR_ACTIVE_LIGHT
-  },
+  return EditorView.baseTheme({
+    '&light': {
+      '--indent-marker-bg-color': colors.light,
+      '--indent-marker-active-bg-color': colors.activeLight,
+    },
+    
+    '&dark': {
+      '--indent-marker-bg-color': colors.dark,
+      '--indent-marker-active-bg-color': colors.activeDark,
+    },
   
-  '&dark': {
-    '--indent-marker-bg-color': MARKER_COLOR_DARK,
-    '--indent-marker-active-bg-color': MARKER_COLOR_ACTIVE_DARK
-  },
+    '.cm-line': {
+      position: 'relative',
+    },
+  
+    // this pseudo-element is used to draw the indent markers,
+    // while still allowing the line to have its own background.
+    '.cm-indent-markers::before': {
+      content: '""',
+      position: 'absolute',
+      top: 0,
+      // .cm-line has a padding of 2px 
+      // https://github.com/codemirror/view/blob/1c0a0880fc904714339f059658f3ba3a88bb8e6e/src/theme.ts#L85
+      left: `2px`, 
+      right: 0,
+      bottom: 0,
+      background: 'var(--indent-markers)',
+      pointerEvents: 'none',
+      zIndex: '-1',
+    },
+  });
+}
 
-  '.cm-line': {
-    position: 'relative',
-  },
-
-  // this pseudo-element is used to draw the indent markers,
-  // while still allowing the line to have its own background.
-  '.cm-indent-markers::before': {
-    content: '""',
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    background: 'var(--indent-markers)',
-    pointerEvents: 'none',
-    zIndex: '-1',
-  },
-});
-
-function createGradient(markerCssProperty: string, indentWidth: number, startOffset: number, columns: number) {
-  // the .2px offset to the MARKER_THICKNESS is to make sure that the marker is not removed by subpixel rounding
-  const gradient = `repeating-linear-gradient(to right, var(${markerCssProperty}) 0 ${MARKER_THICKNESS}px, transparent ${MARKER_THICKNESS + .2}px ${indentWidth}ch)`
-  // Subtract one pixel from the background width to get rid of artifacts of pixel rounding at the end of the gradient
+function createGradient(markerCssProperty: string, thickness: number, indentWidth: number, startOffset: number, columns: number) {
+    // the .2px offset to the thickness is to make sure that the marker is not removed by subpixel rounding
+    const gradient = `repeating-linear-gradient(to right, var(${markerCssProperty}) 0 ${thickness}px, transparent ${thickness + .2}px ${indentWidth}ch)`
+  // Subtract one pixel from the background width to get rid of artifacts of pixel rounding
   return `${gradient} ${startOffset * indentWidth}.5ch/calc(${indentWidth * columns}ch - 1px) no-repeat`
 }
 
-function makeBackgroundCSS(entry: IndentEntry, indentWidth: number, hideFirstIndent: boolean) {
+function makeBackgroundCSS(entry: IndentEntry, indentWidth: number, hideFirstIndent: boolean, thickness: number, activeThickness: number) {
   const { level, active } = entry;
+  activeThickness = activeThickness ?? thickness;
   if (hideFirstIndent && level === 0) {
     return [];
   }
@@ -78,46 +81,25 @@ function makeBackgroundCSS(entry: IndentEntry, indentWidth: number, hideFirstInd
     const markersBeforeActive = active - startAt - 1;
     if (markersBeforeActive > 0) {
       backgrounds.push(
-        createGradient('--indent-marker-bg-color', indentWidth, startAt, markersBeforeActive),
+        createGradient('--indent-marker-bg-color', thickness, indentWidth, startAt, markersBeforeActive),
       );
     }
     backgrounds.push(
-      createGradient('--indent-marker-active-bg-color', indentWidth, active - 1, 1),
+      createGradient('--indent-marker-active-bg-color', activeThickness, indentWidth, active - 1, 1),
     );
     if (active !== level) {
       backgrounds.push(
-        createGradient('--indent-marker-bg-color', indentWidth, active, level - active)
+        createGradient('--indent-marker-bg-color', thickness, indentWidth, active, level - active)
       );
     }
   } else {
     backgrounds.push(
-      createGradient('--indent-marker-bg-color', indentWidth, startAt, level - startAt)
+      createGradient('--indent-marker-bg-color', thickness, indentWidth, startAt, level - startAt)
     );
   }
 
   return backgrounds.join(',');
 }
-
-interface IndentationMarkerConfiguration {
-  /**
-   * Determines whether active block marker is styled differently.
-   */
-  highlightActiveBlock?: boolean
-
-  /**
-   * Determines whether markers in the first column are omitted.
-   */
-  hideFirstIndent?: boolean
-}
-
-export const indentationMarkerConfig = Facet.define<IndentationMarkerConfiguration, Required<IndentationMarkerConfiguration>>({
-  combine(configs) {
-    return combineConfig(configs, {
-      highlightActiveBlock: true,
-      hideFirstIndent: false,
-    });
-  }
-});
 
 class IndentMarkersClass implements PluginValue {
   view: EditorView;
@@ -144,10 +126,10 @@ class IndentMarkersClass implements PluginValue {
     this.currentLineNumber = lineNumber;
     const activeBlockUpdateRequired = update.state.facet(indentationMarkerConfig).highlightActiveBlock && lineNumberChanged;
     if (
-        update.docChanged ||
-        update.viewportChanged ||
-        unitWidthChanged ||
-        activeBlockUpdateRequired
+      update.docChanged ||
+      update.viewportChanged ||
+      unitWidthChanged ||
+      activeBlockUpdateRequired
     ) {
       this.generate(update.state);
     }
@@ -157,8 +139,9 @@ class IndentMarkersClass implements PluginValue {
     const builder = new RangeSetBuilder<Decoration>();
 
     const lines = getVisibleLines(this.view, state);
-    const map = new IndentationMap(lines, state, this.unitWidth);
-    const { hideFirstIndent } = state.facet(indentationMarkerConfig)
+    const { hideFirstIndent, markerType, thickness, activeThickness } = state.facet(indentationMarkerConfig);
+    const map = new IndentationMap(lines, state, this.unitWidth, markerType);
+
 
     for (const line of lines) {
       const entry = map.get(line.number);
@@ -167,7 +150,7 @@ class IndentMarkersClass implements PluginValue {
         continue;
       }
 
-      const backgrounds = makeBackgroundCSS(entry, this.unitWidth, hideFirstIndent);
+      const backgrounds = makeBackgroundCSS(entry, this.unitWidth, hideFirstIndent, thickness, activeThickness);
 
       builder.add(
         line.from,
@@ -188,7 +171,7 @@ class IndentMarkersClass implements PluginValue {
 export function indentationMarkers(config: IndentationMarkerConfiguration = {}) {
   return [
     indentationMarkerConfig.of(config),
-    indentTheme,
+    indentTheme(config.colors),
     ViewPlugin.fromClass(IndentMarkersClass, {
       decorations: (v) => v.decorations,
     }),

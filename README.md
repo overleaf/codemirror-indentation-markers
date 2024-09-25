@@ -50,6 +50,38 @@ optional properties:
 
     Boolean that determines whether markers in the first column are omitted.
     Defaults to `false`.
+  
+- `markerType`
+  
+    String that determines how far the indentation markers extend. `"fullScope"` indicates that the markers extend down the full height of a scope. With the `"codeOnly"` option, indentation markers terminate at the last nonempty line in a scope. Defaults to `"fullScope"`.
+
+- `thickness`
+
+    Integer that determines the thickness in pixels of the indentation markers. Defaults to `1`.
+
+- `activeThickness`
+
+    Integer that determines the thickness in pixels of the active indentation markers. If `undefined` or `null` then `thickness` will be used. Defaults to `undefined`.
+
+- `colors`
+
+    Object that determines the colors of the indentation markers.
+
+    - `light`
+
+        String that determines the color of the markers when the editor has a light theme. Defaults to `#F0F1F2`.
+
+    - `dark`
+
+        String that determines the color of the markers when the editor has a dark theme. Defaults to `#2B3245`.
+
+    - `activeLight`
+
+        String that determines the color of the active block marker when the editor has a light theme. Only applies if `highlightActiveBlock` is `true`. Defaults to `#E4E5E6`.
+
+    - `activeDark`
+
+        String that determines the color of the active block marker when the editor has a dark theme. Only applies if `highlightActiveBlock` is `true`. Defaults to `#3C445C`.
 
 #### Example
 
@@ -62,6 +94,14 @@ new EditorView({
       indentationMarkers({
         highlightActiveBlock: false,
         hideFirstIndent: true,
+        markerType: "codeOnly",
+        thickness: 2,
+        colors: {
+          light: 'LightBlue',
+          dark: 'DarkBlue',
+          activeLight: 'LightGreen',
+          activeDark: 'DarkGreen',
+        }
       })
     ],
   }),
