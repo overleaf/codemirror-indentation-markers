@@ -15,6 +15,38 @@ import { IndentationMarkerConfiguration, indentationMarkerConfig } from "./confi
 // CSS classes:
 // - .cm-indent-markers
 
+const theme = EditorView.baseTheme({
+  '&light': {
+    '--indent-marker-bg-color': 'var(--indent-marker-bg-color-light)',
+    '--indent-marker-active-bg-color': 'var(--indent-marker-active-bg-color-light)',
+  },
+  
+  '&dark': {
+    '--indent-marker-bg-color': 'var(--indent-marker-bg-color-dark)',
+    '--indent-marker-active-bg-color': 'var(--indent-marker-active-bg-color-dark)',
+  },
+
+  '.cm-line': {
+    position: 'relative',
+  },
+
+  // this pseudo-element is used to draw the indent markers,
+  // while still allowing the line to have its own background.
+  '.cm-indent-markers::before': {
+    content: '""',
+    position: 'absolute',
+    top: 0,
+    // .cm-line has a padding of 2px
+    // https://github.com/codemirror/view/blob/1c0a0880fc904714339f059658f3ba3a88bb8e6e/src/theme.ts#L85
+    left: `2px`,
+    right: 0,
+    bottom: 0,
+    background: 'var(--indent-markers)',
+    pointerEvents: 'none',
+    zIndex: '-1',
+  },
+});
+
 function indentTheme(colorOptions: IndentationMarkerConfiguration['colors']) {
   const defaultColors = {
     light: '#F0F1F2',
@@ -28,37 +60,14 @@ function indentTheme(colorOptions: IndentationMarkerConfiguration['colors']) {
     colors = {...defaultColors, ...colorOptions};
   }
 
-  return EditorView.baseTheme({
-    '&light': {
-      '--indent-marker-bg-color': colors.light,
-      '--indent-marker-active-bg-color': colors.activeLight,
-    },
-    
-    '&dark': {
-      '--indent-marker-bg-color': colors.dark,
-      '--indent-marker-active-bg-color': colors.activeDark,
-    },
-  
-    '.cm-line': {
-      position: 'relative',
-    },
-  
-    // this pseudo-element is used to draw the indent markers,
-    // while still allowing the line to have its own background.
-    '.cm-indent-markers::before': {
-      content: '""',
-      position: 'absolute',
-      top: 0,
-      // .cm-line has a padding of 2px 
-      // https://github.com/codemirror/view/blob/1c0a0880fc904714339f059658f3ba3a88bb8e6e/src/theme.ts#L85
-      left: `2px`, 
-      right: 0,
-      bottom: 0,
-      background: 'var(--indent-markers)',
-      pointerEvents: 'none',
-      zIndex: '-1',
-    },
-  });
+  return [theme, EditorView.editorAttributes.of({
+    style: [
+      `--indent-marker-bg-color-light: ${colors.light};`,
+      `--indent-marker-active-bg-color-light: ${colors.activeLight};`,
+      `--indent-marker-bg-color-dark: ${colors.dark};`,
+      `--indent-marker-active-bg-color-dark: ${colors.activeDark};`
+    ].join(' '),
+  })];
 }
 
 function createGradient(markerCssProperty: string, thickness: number, indentWidth: number, startOffset: number, columns: number) {
